@@ -1,0 +1,14 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SKILL_VALIDATOR: 1.8.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck skills/*/scripts/*.sh
+      - name: Install skill-validator
+        run: |
+          curl -fsSL "https://github.com/agent-ecosystem/skill-validator/releases/download/v$SKILL_VALIDATOR/skill-validator_${SKILL_VALIDATOR}_linux_amd64.tar.gz" | tar xz -C "$RUNNER_TEMP" skill-validator
+      - run: '"$RUNNER_TEMP/skill-validator" check --emit-annotations skills/'
