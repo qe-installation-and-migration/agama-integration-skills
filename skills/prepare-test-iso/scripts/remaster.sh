@@ -26,7 +26,7 @@ name="$(basename "$src")"
 build="$(sed -E 's/.*-Build([0-9.]+)\.install\.iso/\1/' <<<"$name")"
 arch="$(sed -E "s/^$product-$ver-$flavor-([^-]+)-Build.*/\1/" <<<"$name")"
 # default register proxy only exists for the newest version (detected)
-latest="$(curl -fsSk "https://download.suse.de/ibs/SUSE:/SLFO:/Products:/${product//-/_}:/?json" | grep -oE '"16\.[0-9]+:\\/"' | tr -d '"\\/:' | sort -V | tail -n1)"
+latest="$(curl -fsS "https://download.suse.de/ibs/SUSE:/SLFO:/Products:/${product//-/_}:/?json" | grep -oE '"16\.[0-9]+:\\/"' | tr -d '"\\/:' | sort -V | tail -n1)"
 [ -z "$reg" ] && [ "$ver" = "$latest" ] && reg="http://all-$build.proxy.scc.suse.de"
 
 params="live.password=$pw"
@@ -40,10 +40,12 @@ trap 'chmod -R u+w "$tmp"; rm -rf "$tmp"' EXIT
 xorriso -indev "$src" -osirrox on -extract / "$tmp" >/dev/null
 chmod -R u+w "$tmp"
 sed -i -E "s/^set timeout=.*/set timeout=$timeout/" "$tmp/boot/grub2/grub.cfg"
-# --tmp-dir: /tmp is blocked in the sandbox; --no-sign: no GPG key needed for a VM test
+# --tmp-dir: where mkmedia builds (override with TMPDIR); --no-sign: no GPG key needed for a VM test
 mkmedia --create "$out" --boot "$params" --tmp-dir "${TMPDIR:-/tmp}" --no-sign "$tmp"
 
+# JSON string escaping for the values that may contain a backslash or a quote
+j() { local s=${1//\\/\\\\}; printf '%s' "${s//\"/\\\"}"; }
 cat > "$dir/last-prepared.json" <<J
-{"iso":"$out","source_iso":"$src","version":"$ver","flavor":"$flavor","arch":"$arch","product":"$product","build":"$build","password":"$pw","grub_timeout":$timeout,"register_url":"$reg","params":"$params"}
+{"iso":"$(j "$out")","source_iso":"$(j "$src")","version":"$ver","flavor":"$flavor","arch":"$arch","product":"$product","build":"$build","password":"$(j "$pw")","grub_timeout":$timeout,"register_url":"$(j "$reg")","params":"$(j "$params")"}
 J
 echo "$out"

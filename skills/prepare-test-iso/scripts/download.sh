@@ -13,14 +13,14 @@ case "$flavor" in Online|Full) ;; *) echo "$usage" >&2; exit 1 ;; esac
 arch=x86_64; [ "$product" = SLES-NVIDIA ] && arch=aarch64
 
 base="https://download.suse.de/ibs/SUSE:/SLFO:/Products:/${product//-/_}:/$ver:/TEST/product/iso"
-name="$(curl -fsSk "$base/?json" | grep -o "$product-$ver-$flavor-$arch-Build[0-9.]*\.install\.iso" | sort -uV | tail -n1)"
+name="$(curl -fsS "$base/?json" | grep -o "$product-$ver-$flavor-$arch-Build[0-9.]*\.install\.iso" | sort -uV | tail -n1)"
 [ -n "$name" ] || { echo "no $product $flavor $arch ISO for $ver" >&2; exit 1; }
 
 dir="$PWD/isos"
 mkdir -p "$dir"
 src="$dir/$name"
 if [ ! -e "$src" ]; then
-  curl -fSLk "$base/$name" > "$src.part"; mv "$src.part" "$src"
+  curl -fSL "$base/$name" > "$src.part"; mv "$src.part" "$src"
 fi
 # keep only the 2 newest builds per version (with their modified ISOs)
 printf '%s\n' "$dir/$product-$ver-"*-Build*.install.iso | sort -V | head -n -2 | while read -r f; do rm -f "${f%.iso}"*; done
