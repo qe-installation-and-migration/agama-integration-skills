@@ -11,7 +11,7 @@ and run shell commands. Harnesses that implement the [Agent Skills](https://agen
 
 | Skill | Use it when | What it does |
 |---|---|---|
-| [`prepare-test-iso`](skills/prepare-test-iso/SKILL.md) | you need a SLES / SLES-NVIDIA 16.x install ISO for a VM test | Downloads the latest `:TEST` build (Online or Full) from download.suse.de and patches it: live password, grub timeout, register URL, extra boot params. Writes `./isos/last-prepared.json` for later skills. |
+| [`prepare-test-iso`](skills/prepare-test-iso/SKILL.md) | you need a SLES / SLES-NVIDIA 16.x install ISO for a VM test | Downloads the latest `:TEST` build (Online or Full) from download.suse.de and patches it (or, with `--source agama-devel`, the unpatched Agama Head live ISO, x86_64): live password, grub timeout, register URL, extra boot params. Writes `./isos/last-prepared.json` for later skills. |
 
 ## Layout
 

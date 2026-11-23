@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
 # Remaster the latest SLES TEST ISO (fetched by download.sh): live password, grub timeout, register URL, boot params. Output dir: ./isos (cwd).
 set -euo pipefail
-usage="usage: remaster.sh [--product SLES|SLES-NVIDIA] <16.0|16.1|16.2> <Online|Full> [--password <pw>] [--grub-timeout <sec>] [--register-url <url>] [boot-param ...]"
+usage="usage: remaster.sh --source agama-devel <16.1|16.2>   (download + checksum only, see SKILL.md)
+       remaster.sh [--product SLES|SLES-NVIDIA] <16.0|16.1|16.2> <Online|Full> [--password <pw>] [--grub-timeout <sec>] [--register-url <url>] [boot-param ...]"
 here="$(dirname "$(readlink -f "$0")")"
 dir="$PWD/isos"
+if [ "${1:-}" = --source ]; then
+  # Agama Head live ISO: autoboots and needs no patch (the live password is tagged later by the VM boot script), so it is
+  # only downloaded and verified. No patch options are accepted, none of them would be applied.
+  [ "${2:-}" = agama-devel ] && [ $# -eq 3 ] || { echo "$usage" >&2; exit 1; }
+  ver="$3"
+  src="$("$here/download.sh" --source agama-devel "$ver")"
+  build="$(sed -E 's/.*-Build([0-9.]+)\.iso/\1/' <<<"$(basename "$src")")"
+  cat > "$dir/last-prepared.json" <<J
+{"iso":"$src","source_iso":"$src","version":"$ver","flavor":"","arch":"x86_64","product":"agama-devel","build":"$build","patched":false}
+J
+  echo "$src"
+  exit 0
+fi
 product=SLES
 [ "${1:-}" = --product ] && { product="${2:?}"; shift 2; }
 [ $# -ge 2 ] || { echo "$usage" >&2; exit 1; }
