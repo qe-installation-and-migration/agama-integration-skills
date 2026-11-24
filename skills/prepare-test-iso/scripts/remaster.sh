@@ -8,8 +8,9 @@ here="$(dirname "$(readlink -f "$0")")"
 dir="$PWD/isos"
 if [ "${1:-}" = --source ]; then
   # Agama Head live ISO: downloaded, checked against its .sha512 and patched only in grub.cfg: the menu timeout and the
-  # live password as a kernel parameter. The ISO tag that boot-vm.sh adds is not enough: Build 23.2 ignores it for ssh
-  # (login refused), only live.password on the kernel line works. Version optional: without it the newest Head one.
+  # live password as a kernel parameter. Tagging the ISO (tagmedia --add-tag live_password=..., what boot-vm.sh does) is
+  # gone from the Head builds (confirmed with the developers; Build 23.2 refuses the ssh login): only live.password on
+  # the kernel line works. Version optional: without it the newest Head one.
   [ "${2:-}" = agama-devel ] || { echo "$usage" >&2; exit 1; }
   shift 2
   ver=""; timeout=3; pw=nots3cr3t
