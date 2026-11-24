@@ -1,21 +1,42 @@
 #!/usr/bin/env bash
 # Remaster the latest SLES TEST ISO (fetched by download.sh): live password, grub timeout, register URL, boot params. Output dir: ./isos (cwd).
+# With --source agama-devel only the grub timeout is patched (the live password is set later by the VM boot script).
 set -euo pipefail
-usage="usage: remaster.sh --source agama-devel <16.1|16.2>   (download + checksum only, see SKILL.md)
+usage="usage: remaster.sh --source agama-devel [16.1|16.2] [--grub-timeout <sec>]   (newest Head build if no version, see SKILL.md)
        remaster.sh [--product SLES|SLES-NVIDIA] <16.0|16.1|16.2> <Online|Full> [--password <pw>] [--grub-timeout <sec>] [--register-url <url>] [boot-param ...]"
 here="$(dirname "$(readlink -f "$0")")"
 dir="$PWD/isos"
 if [ "${1:-}" = --source ]; then
-  # Agama Head live ISO: autoboots and needs no patch (the live password is tagged later by the VM boot script), so it is
-  # only downloaded and verified. No patch options are accepted, none of them would be applied.
-  [ "${2:-}" = agama-devel ] && [ $# -eq 3 ] || { echo "$usage" >&2; exit 1; }
-  ver="$3"
-  src="$("$here/download.sh" --source agama-devel "$ver")"
-  build="$(sed -E 's/.*-Build([0-9.]+)\.iso/\1/' <<<"$(basename "$src")")"
+  # Agama Head live ISO: downloaded, checked against its .sha512 and patched only in the grub menu timeout (the live
+  # password is tagged later by the VM boot script). The version is optional: without it the newest one Head publishes.
+  [ "${2:-}" = agama-devel ] || { echo "$usage" >&2; exit 1; }
+  shift 2
+  ver=""; timeout=3
+  [[ "${1:-}" =~ ^16\.[0-9]+$ ]] && { ver="$1"; shift; }
+  if [ "${1:-}" = --grub-timeout ]; then timeout="${2:-}"; shift 2 || { echo "$usage" >&2; exit 1; }; fi
+  [ $# -eq 0 ] || { echo "$usage" >&2; exit 1; }
+  case "$timeout" in ""|*[!0-9]*|0) echo "--grub-timeout must be an integer >= 1 (0 stalls the menu)" >&2; exit 1 ;; esac
+  command -v xorriso >/dev/null || { echo "xorriso not found" >&2; exit 1; }
+  src="$("$here/download.sh" --source agama-devel $ver | tail -n1)"
+  name="$(basename "$src")"
+  ver="$(sed -E 's/.*SUSE_SLE_([0-9.]+[0-9])-Build.*/\1/' <<<"$name")"
+  build="$(sed -E 's/.*-Build([0-9.]+)\.iso/\1/' <<<"$name")"
+  out="${src%.iso}-modified.iso"
+  rm -f "$out"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  # Patch grub.cfg in place with xorriso and replay the boot setup. Not mkmedia: it rebuilds the image with the volume
+  # id ISOIMAGE, and the live system then never finds its medium (Install-SUSE-SLE-<ver>-x86_64).
+  xorriso -osirrox on -indev "$src" -extract /boot/grub2/grub.cfg "$tmp/grub.cfg" >/dev/null 2>&1
+  chmod u+w "$tmp/grub.cfg"
+  grep -q '^set timeout=' "$tmp/grub.cfg" || { echo "no 'set timeout=' in boot/grub2/grub.cfg of $name" >&2; exit 1; }
+  sed -i -E "s/^set timeout=.*/set timeout=$timeout/" "$tmp/grub.cfg"
+  xorriso -indev "$src" -outdev "$out" -boot_image any replay -map "$tmp/grub.cfg" /boot/grub2/grub.cfg -commit >/dev/null 2>&1 \
+    || { rm -f "$out"; echo "could not patch the grub timeout of $name" >&2; exit 1; }
   cat > "$dir/last-prepared.json" <<J
-{"iso":"$src","source_iso":"$src","version":"$ver","flavor":"","arch":"x86_64","product":"agama-devel","build":"$build","patched":false}
+{"iso":"$out","source_iso":"$src","version":"$ver","flavor":"","arch":"x86_64","product":"agama-devel","build":"$build","patched":true,"grub_timeout":$timeout}
 J
-  echo "$src"
+  echo "$out"
   exit 0
 fi
 product=SLES

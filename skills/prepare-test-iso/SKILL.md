@@ -5,7 +5,7 @@ description: "Download the latest SLES or SLES-NVIDIA TEST build (16.0, 16.1, 16
 
 # Prepare Test ISO
 
-Inputs: **source** (SLES `:TEST` build by default; `agama-devel` only if the user names it), **version** (`16.0`|`16.1`|`16.2`) and **flavor** (`Online`|`Full`). If either is missing, ask in one question and wait. Never guess or default the flavor.
+Inputs: **source** (SLES `:TEST` build by default; `agama-devel` only if the user names it; it needs no version), **version** (`16.0`|`16.1`|`16.2`) and **flavor** (`Online`|`Full`). If either is missing, ask in one question and wait. Never guess or default the flavor.
 
 Run exactly this from the working directory (no pipes or wrappers); `<skill-dir>` is this skill's directory. ISOs go to `./isos/`.
 
@@ -19,10 +19,10 @@ Download only, no patching (last stdout line is the source ISO path, no JSON wri
 bash <skill-dir>/scripts/download.sh [--product SLES|SLES-NVIDIA] <version> <flavor>
 ```
 
-Development build instead of a SLES TEST build (only when the user asks for it, never as a fallback): the Agama Head live ISO from `Devel:/YaST:/Agama:/Head` (x86_64 only, no flavor, `16.1` or `16.2`). It is downloaded, checked against its `.sha512` and **not patched** (it autoboots; the live password is set later by the VM boot script), so no `--password`, `--grub-timeout`, `--register-url` or boot params are accepted. The output and `last-prepared.json` have the same shape (`"product":"agama-devel"`, `"patched":false`, empty `flavor`).
+Development build instead of a SLES TEST build (only when the user asks for it, never as a fallback): the Agama Head live ISO from `Devel:/YaST:/Agama:/Head` (x86_64 only, no flavor). **No version is needed**: it is always the newest product Head publishes (a `16.1` or `16.2` argument is still accepted). It is downloaded, checked against its `.sha512` and patched in one thing only: the GRUB menu timeout (default 3 s, `--grub-timeout <sec>` to change). The live password is set later by the VM boot script, so no `--password`, `--register-url` or boot params are accepted. The output is the `-modified.iso`; `last-prepared.json` has the same shape as for SLES (`"product":"agama-devel"`, `"patched":true`, `"grub_timeout"`, empty `flavor`, the detected `version`).
 
 ```bash
-bash <skill-dir>/scripts/remaster.sh --source agama-devel <16.1|16.2>
+bash <skill-dir>/scripts/remaster.sh --source agama-devel [16.1|16.2] [--grub-timeout <sec>]
 ```
 
 | Option | Default |

@@ -3,13 +3,18 @@
 # the 2 newest builds per version. Prints the ISO path.
 set -euo pipefail
 usage="usage: download.sh [--product SLES|SLES-NVIDIA] <16.0|16.1|16.2> <Online|Full>
-       download.sh --source agama-devel <16.1|16.2>   (Agama Head development build, x86_64, no flavor)"
+       download.sh --source agama-devel [16.1|16.2]   (Agama Head development build, x86_64, no flavor; without a version: the newest one Head publishes)"
 
 if [ "${1:-}" = --source ]; then
-  [ "${2:-}" = agama-devel ] && [ $# -eq 3 ] || { echo "$usage" >&2; exit 1; }
-  ver="$3"
-  case "$ver" in 16.1|16.2) ;; *) echo "$usage" >&2; exit 1 ;; esac
+  [ "${2:-}" = agama-devel ] && [ $# -le 3 ] || { echo "$usage" >&2; exit 1; }
+  ver="${3:-}"
+  case "$ver" in ""|16.1|16.2) ;; *) echo "$usage" >&2; exit 1 ;; esac
   # Devel:YaST:Agama:Head, x86_64 only: other architectures would run emulated, too slow for local VM tests
+  if [ -z "$ver" ]; then
+    # the ISO name has no version of its own besides SUSE_SLE_<ver>, which is also the images_SLES-<ver> directory
+    ver="$(curl -fsS "https://download.suse.de/ibs/Devel:/YaST:/Agama:/Head/?json" | grep -o 'images_SLES-[0-9.]*[0-9]' | sed 's/images_SLES-//' | sort -uV | tail -n1)"
+    [ -n "$ver" ] || { echo "no images_SLES-* directory in Agama Head" >&2; exit 1; }
+  fi
   base="https://download.suse.de/ibs/Devel:/YaST:/Agama:/Head/images_SLES-$ver/iso"
   name="$(curl -fsS "$base/?json" | grep -o "agama-installer\.x86_64-[0-9.]*-SUSE_SLE_$ver-Build[0-9.]*\.iso" | sort -uV | tail -n1)"
   [ -n "$name" ] || { echo "no Agama Head x86_64 ISO for $ver" >&2; exit 1; }
@@ -23,7 +28,7 @@ if [ "${1:-}" = --source ]; then
     [ -n "$want" ] && [ "$want" = "$got" ] || { rm -f "$src.part"; echo "sha512 mismatch for $name" >&2; exit 1; }
     mv "$src.part" "$src"
   fi
-  printf '%s\n' "$dir/agama-installer.x86_64-"*"-SUSE_SLE_$ver-Build"*.iso | sort -V | head -n -2 | xargs -r rm -f
+  printf '%s\n' "$dir/agama-installer.x86_64-"*"-SUSE_SLE_$ver-Build"*.iso | grep -v -- -modified | sort -V | head -n -2 | while read -r f; do rm -f "${f%.iso}"*; done
   echo "$src"
   exit 0
 fi
