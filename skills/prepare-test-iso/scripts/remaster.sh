@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 # Remaster the latest SLES TEST ISO (fetched by download.sh): live password, grub timeout, register URL, boot params. Output dir: ./isos (cwd).
-# With --source agama-devel only the grub timeout is patched (the live password is set later by the VM boot script).
+# With --source agama-devel only grub.cfg is patched: the grub timeout and the live password (kernel parameter).
 set -euo pipefail
-usage="usage: remaster.sh --source agama-devel [16.1|16.2] [--grub-timeout <sec>]   (newest Head build if no version, see SKILL.md)
+usage="usage: remaster.sh --source agama-devel [16.1|16.2] [--password <pw>] [--grub-timeout <sec>]   (newest Head build if no version, see SKILL.md)
        remaster.sh [--product SLES|SLES-NVIDIA] <16.0|16.1|16.2> <Online|Full> [--password <pw>] [--grub-timeout <sec>] [--register-url <url>] [boot-param ...]"
 here="$(dirname "$(readlink -f "$0")")"
 dir="$PWD/isos"
 if [ "${1:-}" = --source ]; then
-  # Agama Head live ISO: downloaded, checked against its .sha512 and patched only in the grub menu timeout (the live
-  # password is tagged later by the VM boot script). The version is optional: without it the newest one Head publishes.
+  # Agama Head live ISO: downloaded, checked against its .sha512 and patched only in grub.cfg: the menu timeout and the
+  # live password as a kernel parameter. The ISO tag that boot-vm.sh adds is not enough: Build 23.2 ignores it for ssh
+  # (login refused), only live.password on the kernel line works. Version optional: without it the newest Head one.
   [ "${2:-}" = agama-devel ] || { echo "$usage" >&2; exit 1; }
   shift 2
-  ver=""; timeout=3
+  ver=""; timeout=3; pw=nots3cr3t
   [[ "${1:-}" =~ ^16\.[0-9]+$ ]] && { ver="$1"; shift; }
-  if [ "${1:-}" = --grub-timeout ]; then timeout="${2:-}"; shift 2 || { echo "$usage" >&2; exit 1; }; fi
-  [ $# -eq 0 ] || { echo "$usage" >&2; exit 1; }
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --password) pw="${2:-}"; shift 2 || { echo "$usage" >&2; exit 1; } ;;
+      --grub-timeout) timeout="${2:-}"; shift 2 || { echo "$usage" >&2; exit 1; } ;;
+      *) echo "$usage" >&2; exit 1 ;;
+    esac
+  done
+  # the password goes inside double quotes in grub.cfg: no quote, backslash, $ or whitespace
+  case "$pw" in ""|*[!A-Za-z0-9_.,:@%+=-]*) echo "--password may only contain letters, digits and _.,:@%+=-" >&2; exit 1 ;; esac
   case "$timeout" in ""|*[!0-9]*|0) echo "--grub-timeout must be an integer >= 1 (0 stalls the menu)" >&2; exit 1 ;; esac
   command -v xorriso >/dev/null || { echo "xorriso not found" >&2; exit 1; }
   src="$("$here/download.sh" --source agama-devel $ver | tail -n1)"
@@ -30,11 +38,11 @@ if [ "${1:-}" = --source ]; then
   xorriso -osirrox on -indev "$src" -extract /boot/grub2/grub.cfg "$tmp/grub.cfg" >/dev/null 2>&1
   chmod u+w "$tmp/grub.cfg"
   grep -q '^set timeout=' "$tmp/grub.cfg" || { echo "no 'set timeout=' in boot/grub2/grub.cfg of $name" >&2; exit 1; }
-  sed -i -E "s/^set timeout=.*/set timeout=$timeout/" "$tmp/grub.cfg"
+  sed -i -E "s/^set timeout=.*/set timeout=$timeout\nset live_options=\"live.password=$pw\"/" "$tmp/grub.cfg"
   xorriso -indev "$src" -outdev "$out" -boot_image any replay -map "$tmp/grub.cfg" /boot/grub2/grub.cfg -commit >/dev/null 2>&1 \
     || { rm -f "$out"; echo "could not patch the grub timeout of $name" >&2; exit 1; }
   cat > "$dir/last-prepared.json" <<J
-{"iso":"$out","source_iso":"$src","version":"$ver","flavor":"","arch":"x86_64","product":"agama-devel","build":"$build","patched":true,"grub_timeout":$timeout}
+{"iso":"$out","source_iso":"$src","version":"$ver","flavor":"","arch":"x86_64","product":"agama-devel","build":"$build","patched":true,"password":"$pw","grub_timeout":$timeout}
 J
   echo "$out"
   exit 0
